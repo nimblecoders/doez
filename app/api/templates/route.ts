@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySession } from "@/lib/auth";
+// import { verifySession } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import Template from "@/lib/models/template";
 import ActivityLog from "@/lib/models/activity-log";
