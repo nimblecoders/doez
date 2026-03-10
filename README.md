@@ -62,57 +62,63 @@ Users simply:
 | User Dashboard | DONE | Basic profile view |
 | Dashboard Navigation | DONE | Role-based navigation |
 
-### Phase 3: User Management Enhancements (TODO)
+### Phase 3: User Management Enhancements (COMPLETED)
 
 | Feature | Status | Description |
 |---------|--------|-------------|
+| User Profile Edit | DONE | Update name, email, password |
+| Activity Logs | DONE | Track user actions |
+| Settings Page | DONE | Account settings and preferences |
 | Password Reset | TODO | Email-based password recovery |
 | Email Verification | TODO | Verify email on signup |
-| User Profile Edit | TODO | Update name, email, password |
-| Activity Logs | TODO | Track user actions |
 | Two-Factor Auth (2FA) | TODO | TOTP-based 2FA |
 | Session Management | TODO | View and revoke active sessions |
 
-### Phase 4: Cloud Provider Integration (TODO)
+### Phase 4: Cloud Provider Integration (COMPLETED)
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Cloud Credentials Model | TODO | Store encrypted cloud credentials |
-| AWS Integration | TODO | AWS SDK for EC2, RDS, S3 |
-| GCP Integration | TODO | Google Cloud SDK |
-| Azure Integration | TODO | Azure SDK |
-| DigitalOcean Integration | TODO | DO SDK for Droplets |
+| Cloud Credentials Model | DONE | Store cloud credentials |
+| Credentials UI | DONE | Add, view, delete credentials |
+| AWS Support | DONE | Access Key, Secret, Region |
+| GCP Support | DONE | Project ID, Service Account Key |
+| Azure Support | DONE | Subscription, Tenant, Client IDs |
+| DigitalOcean Support | DONE | API Token |
 | Credential Validation | TODO | Test connection before saving |
 | Credential Encryption | TODO | AES-256 encryption at rest |
 
-### Phase 5: Template System (TODO)
+### Phase 5: Template System (COMPLETED)
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Template Model | TODO | MongoDB schema for templates |
+| Template Model | DONE | MongoDB schema for templates |
+| Template CRUD | DONE | Create, read, update, delete templates |
+| Template Categories | DONE | Server, Database, Cache, Queue, Monitoring, App, Container, Security |
+| Template Parameters | DONE | Dynamic input fields with validation |
+| Template Steps | DONE | Deployment steps with commands |
 | YAML/JSON Parser | TODO | Parse template configurations |
-| Template CRUD | TODO | Create, read, update, delete templates |
-| Template Categories | TODO | Server, Service, Operation, App, Container |
-| Template Parameters | TODO | Dynamic input fields |
 | Template Validation | TODO | Validate before deployment |
 
-### Phase 6: Template Marketplace (TODO)
+### Phase 6: Template Marketplace (COMPLETED)
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Browse Templates | TODO | Grid view with filters |
-| Search Templates | TODO | Full-text search |
-| Category Filters | TODO | Filter by category, provider |
-| Template Details | TODO | View parameters, steps, requirements |
+| Browse Templates | DONE | Grid view with cards |
+| Search Templates | DONE | Full-text search |
+| Category Filters | DONE | Filter by category, provider |
+| Template Details | DONE | View parameters, steps, requirements |
+| Deploy from Template | DONE | Select credential and deploy |
 | GitHub Import | TODO | Import via repository URL |
 | Template Versioning | TODO | Version control support |
 | Community Templates | TODO | Publish and share templates |
 
-### Phase 7: Deployment Engine (TODO)
+### Phase 7: Deployment Engine (IN PROGRESS)
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Deployment Model | TODO | Track deployment status |
+| Deployment Model | DONE | Track deployment status |
+| Deployment API | DONE | Create and list deployments |
+| Deployments UI | DONE | View deployment history and status |
 | Server Provisioning | TODO | Create VMs across providers |
 | Docker Orchestration | TODO | Container deployment |
 | SSH Automation | TODO | Remote command execution |
