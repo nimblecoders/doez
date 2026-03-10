@@ -89,5 +89,5 @@ export async function verifySession(): Promise<string | null> {
     return null;
   }
 
-  return session.userId; // return rid
+  return session; // return rid
 }
