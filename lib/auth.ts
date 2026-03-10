@@ -76,3 +76,18 @@ export async function deleteSession() {
   const cookieStore = await cookies();
   cookieStore.delete("session");
 }
+export async function verifySession(): Promise<string | null> {
+  const session = await getSession();
+
+  if (!session) {
+    return null;
+  }
+
+  // Check if session expired
+  if (new Date(session.expiresAt) < new Date()) {
+    await deleteSession();
+    return null;
+  }
+
+  return session.userId; // return rid
+}
