@@ -11,7 +11,10 @@ export interface SSHConfig {
   username: string;
   privateKey?: string;
   password?: string;
+  privateKeyPassphrase?: string;
   timeout?: number;
+  readyTimeout?: number;
+  strictHostKeyChecking?: boolean;
 }
 
 export class SSHExecutor {
@@ -138,6 +141,19 @@ export class SSHExecutor {
    */
   clearHistory(): void {
     this.commandHistory = [];
+  }
+
+  /**
+   * Get connection info
+   */
+  getConnectionInfo() {
+    return {
+      host: this.config.host,
+      port: this.config.port,
+      username: this.config.username,
+      isConnected: this.isConnected,
+      commandCount: this.commandHistory.length,
+    };
   }
 }
 

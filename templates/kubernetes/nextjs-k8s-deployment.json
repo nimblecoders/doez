@@ -1,0 +1,104 @@
+{
+  "id": "nextjs-kubernetes-deployment",
+  "name": "Next.js Kubernetes Deployment",
+  "description": "Deploy Next.js on Kubernetes cluster with service and ingress",
+  "version": "1.0.0",
+  "category": "kubernetes",
+  "provider": "any",
+  "tags": ["nextjs", "kubernetes", "k8s", "cluster", "helm"],
+  "estimatedTime": "90 minutes",
+  "parameters": [
+    {
+      "name": "APP_NAME",
+      "type": "string",
+      "required": true,
+      "default": "doez"
+    },
+    {
+      "name": "NAMESPACE",
+      "type": "string",
+      "required": true,
+      "default": "default"
+    },
+    {
+      "name": "DOCKER_IMAGE",
+      "type": "string",
+      "required": true,
+      "default": "ghcr.io/username/doez:latest"
+    },
+    {
+      "name": "REPLICAS",
+      "type": "number",
+      "required": true,
+      "default": 3
+    },
+    {
+      "name": "MONGODB_URI",
+      "type": "string",
+      "required": true,
+      "secret": true
+    },
+    {
+      "name": "JWT_SECRET",
+      "type": "string",
+      "required": true,
+      "secret": true
+    },
+    {
+      "name": "DOMAIN",
+      "type": "string",
+      "required": true,
+      "description": "Domain for ingress"
+    },
+    {
+      "name": "DEPLOYMENT_PATH",
+      "type": "string",
+      "default": "/opt/doez-k8s",
+      "required": true
+    }
+  ],
+  "steps": [
+    {
+      "name": "Create deployment directory",
+      "command": "mkdir -p ${DEPLOYMENT_PATH} && cd ${DEPLOYMENT_PATH}"
+    },
+    {
+      "name": "Create namespace",
+      "command": "kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -"
+    },
+    {
+      "name": "Create secrets",
+      "command": "kubectl create secret generic ${APP_NAME}-secrets --from-literal=mongodb-uri=${MONGODB_URI} --from-literal=jwt-secret=${JWT_SECRET} -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -"
+    },
+    {
+      "name": "Create Kubernetes manifest",
+      "command": "cat > ${DEPLOYMENT_PATH}/deployment.yaml << 'EOF'\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ${APP_NAME}-config\n  namespace: ${NAMESPACE}\ndata:\n  NODE_ENV: \"production\"\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: ${APP_NAME}\n  namespace: ${NAMESPACE}\nspec:\n  replicas: ${REPLICAS}\n  selector:\n    matchLabels:\n      app: ${APP_NAME}\n  template:\n    metadata:\n      labels:\n        app: ${APP_NAME}\n    spec:\n      containers:\n      - name: app\n        image: ${DOCKER_IMAGE}\n        ports:\n        - containerPort: 3000\n          name: http\n        env:\n        - name: NODE_ENV\n          valueFrom:\n            configMapKeyRef:\n              name: ${APP_NAME}-config\n              key: NODE_ENV\n        - name: MONGODB_URI\n          valueFrom:\n            secretKeyRef:\n              name: ${APP_NAME}-secrets\n              key: mongodb-uri\n        - name: JWT_SECRET\n          valueFrom:\n            secretKeyRef:\n              name: ${APP_NAME}-secrets\n              key: jwt-secret\n        resources:\n          requests:\n            memory: \"256Mi\"\n            cpu: \"250m\"\n          limits:\n            memory: \"512Mi\"\n            cpu: \"500m\"\n        livenessProbe:\n          httpGet:\n            path: /api/auth/check\n            port: 3000\n          initialDelaySeconds: 30\n          periodSeconds: 10\n        readinessProbe:\n          httpGet:\n            path: /api/auth/check\n            port: 3000\n          initialDelaySeconds: 10\n          periodSeconds: 5\n        securityContext:\n          runAsNonRoot: true\n          runAsUser: 1000\n          readOnlyRootFilesystem: true\n          allowPrivilegeEscalation: false\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: ${APP_NAME}\n  namespace: ${NAMESPACE}\nspec:\n  type: ClusterIP\n  selector:\n    app: ${APP_NAME}\n  ports:\n  - port: 80\n    targetPort: 3000\n    protocol: TCP\n---\napiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: ${APP_NAME}\n  namespace: ${NAMESPACE}\nspec:\n  rules:\n  - host: ${DOMAIN}\n    http:\n      paths:\n      - path: /\n        pathType: Prefix\n        backend:\n          service:\n            name: ${APP_NAME}\n            port:\n              number: 80\nEOF"
+    },
+    {
+      "name": "Apply Kubernetes manifest",
+      "command": "kubectl apply -f ${DEPLOYMENT_PATH}/deployment.yaml"
+    },
+    {
+      "name": "Check deployment status",
+      "command": "kubectl rollout status deployment/${APP_NAME} -n ${NAMESPACE} --timeout=5m"
+    },
+    {
+      "name": "View pods",
+      "command": "kubectl get pods -n ${NAMESPACE} -l app=${APP_NAME}"
+    },
+    {
+      "name": "View service",
+      "command": "kubectl get service ${APP_NAME} -n ${NAMESPACE}"
+    },
+    {
+      "name": "View ingress",
+      "command": "kubectl get ingress ${APP_NAME} -n ${NAMESPACE}"
+    }
+  ],
+  "postDeployment": {
+    "healthCheck": {
+      "enabled": true,
+      "command": "kubectl get deployment ${APP_NAME} -n ${NAMESPACE} -o jsonpath='{.status.conditions[?(@.type==\"Available\")].status}'"
+    }
+  }
+}

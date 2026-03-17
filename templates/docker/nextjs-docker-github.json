@@ -1,0 +1,155 @@
+{
+  "id": "nextjs-docker-github-actions",
+  "name": "Next.js Docker with GitHub Container Registry",
+  "description": "Deploy Next.js application using Docker with GitHub Container Registry (ghcr.io)",
+  "version": "1.0.0",
+  "category": "docker",
+  "provider": "any",
+  "author": {
+    "name": "OpenDeploy",
+    "email": "devops@opendeploy.io"
+  },
+  "tags": ["nextjs", "docker", "github", "node", "container"],
+  "estimatedTime": "30 minutes",
+  "usageCount": 0,
+  "requirements": [
+    "Docker installed on server",
+    "GitHub account with container registry access",
+    "Node.js 18+ for build verification"
+  ],
+  "parameters": [
+    {
+      "name": "APP_NAME",
+      "type": "string",
+      "description": "Application name (used for Docker image tag)",
+      "required": true,
+      "default": "doez"
+    },
+    {
+      "name": "GITHUB_REGISTRY",
+      "type": "string",
+      "description": "GitHub Container Registry URL",
+      "required": true,
+      "default": "ghcr.io"
+    },
+    {
+      "name": "GITHUB_OWNER",
+      "type": "string",
+      "description": "GitHub username or organization",
+      "required": true,
+      "default": "username"
+    },
+    {
+      "name": "NODE_ENV",
+      "type": "select",
+      "description": "Node environment",
+      "required": true,
+      "options": ["production", "staging", "development"],
+      "default": "production"
+    },
+    {
+      "name": "MONGODB_URI",
+      "type": "string",
+      "description": "MongoDB connection string",
+      "required": true,
+      "secret": true
+    },
+    {
+      "name": "JWT_SECRET",
+      "type": "string",
+      "description": "JWT secret key for authentication",
+      "required": true,
+      "secret": true
+    },
+    {
+      "name": "PORT",
+      "type": "number",
+      "description": "Application port",
+      "required": false,
+      "default": 3000
+    },
+    {
+      "name": "SERVER_IP",
+      "type": "string",
+      "description": "Server IP address for deployment",
+      "required": true
+    }
+  ],
+  "steps": [
+    {
+      "name": "Create project directories",
+      "description": "Create necessary directories for Docker deployment",
+      "command": "mkdir -p /opt/doez && cd /opt/doez && pwd"
+    },
+    {
+      "name": "Pull from GitHub registry",
+      "description": "Pull latest image from GitHub Container Registry",
+      "command": "docker pull ${GITHUB_REGISTRY}/${GITHUB_OWNER}/${APP_NAME}:latest"
+    },
+    {
+      "name": "Remove old container",
+      "description": "Stop and remove old running container if exists",
+      "command": "docker stop ${APP_NAME} || true && docker rm ${APP_NAME} || true",
+      "continueOnError": true
+    },
+    {
+      "name": "Run Docker container",
+      "description": "Start new Docker container with environment variables",
+      "command": "docker run -d --name ${APP_NAME} -p ${PORT}:3000 -e NODE_ENV=${NODE_ENV} -e MONGODB_URI=${MONGODB_URI} -e JWT_SECRET=${JWT_SECRET} --restart unless-stopped ${GITHUB_REGISTRY}/${GITHUB_OWNER}/${APP_NAME}:latest"
+    },
+    {
+      "name": "Verify container health",
+      "description": "Wait for container to be healthy",
+      "command": "sleep 5 && docker ps | grep ${APP_NAME}"
+    },
+    {
+      "name": "Check application logs",
+      "description": "Check application logs to verify startup",
+      "command": "docker logs ${APP_NAME} | head -20"
+    },
+    {
+      "name": "Verify application endpoint",
+      "description": "Test application health check endpoint",
+      "command": "curl -f http://localhost:${PORT}/api/auth/check || exit 1"
+    }
+  ],
+  "postDeployment": {
+    "healthCheck": {
+      "enabled": true,
+      "endpoint": "http://localhost:{PORT}/api/auth/check",
+      "interval": 30,
+      "timeout": 10,
+      "retries": 3
+    },
+    "notifications": [
+      {
+        "type": "log",
+        "message": "Next.js application deployed successfully"
+      }
+    ]
+  },
+  "rollbackSteps": [
+    {
+      "name": "Rollback to previous image",
+      "command": "docker stop ${APP_NAME} && docker run -d --name ${APP_NAME}-rollback -p ${PORT}:3000 ${GITHUB_REGISTRY}/${GITHUB_OWNER}/${APP_NAME}:previous"
+    }
+  ],
+  "documentation": {
+    "title": "Next.js Docker Deployment",
+    "description": "Complete guide for deploying Next.js applications using Docker",
+    "sections": [
+      {
+        "title": "Prerequisites",
+        "content": "Docker must be installed and running on the server. GitHub Container Registry credentials must be configured."
+      },
+      {
+        "title": "Deployment Process",
+        "content": "This template pulls a pre-built Docker image from GitHub Container Registry and runs it with environment variables."
+      },
+      {
+        "title": "Environment Variables",
+        "content": "All sensitive data (MONGODB_URI, JWT_SECRET) should be set as secrets in your deployment system."
+      }
+    ]
+  }
+}

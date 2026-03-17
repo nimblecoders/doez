@@ -9,6 +9,7 @@ import { SSHExecutor } from "./services/ssh-executor";
 import { getCloudProvider } from "./services/cloud-integrations";
 import Deployment from "./models/deployment";
 import CloudCredential from "./models/cloud-credential";
+import ServerConnection from "./models/server-connection";
 import connectDB from "./mongodb";
 
 export interface DeploymentJobData {
@@ -16,6 +17,7 @@ export interface DeploymentJobData {
   userId: string;
   templateId: string;
   credentialId: string;
+  serverConnectionId?: string;
   steps: Array<{
     name: string;
     command: string;
@@ -53,24 +55,42 @@ async function processDeploymentJob(
   try {
     await connectDB();
 
-    const { deploymentId, userId, credentialId, steps, parameters } = job.data;
+    const { deploymentId, userId, credentialId, serverConnectionId, steps, parameters } = job.data;
 
-    // Fetch deployment and credential from database
-    const [deployment, credential] = await Promise.all([
-      Deployment.findById(deploymentId),
-      CloudCredential.findOne({ _id: credentialId, userId }),
-    ]);
-
+    // Fetch deployment from database
+    const deployment = await Deployment.findById(deploymentId);
     if (!deployment) {
       throw new Error(`Deployment ${deploymentId} not found`);
     }
 
-    if (!credential) {
-      throw new Error(`Credential ${credentialId} not found`);
+    // Fetch server connection if provided
+    let serverConnection = null;
+    if (serverConnectionId) {
+      serverConnection = await ServerConnection.findOne({
+        _id: serverConnectionId,
+        userId,
+      });
+
+      if (!serverConnection) {
+        throw new Error(`Server connection ${serverConnectionId} not found`);
+      }
+
+      if (!serverConnection.isValid) {
+        throw new Error(`Server connection ${serverConnection.name} is not validated`);
+      }
     }
 
-    // Update deployment status to in_progress
-    deployment.status = "in_progress";
+    // Fetch cloud credential (optional if using server connection)
+    let credential = null;
+    if (credentialId) {
+      credential = await CloudCredential.findOne({ _id: credentialId, userId });
+      if (!credential) {
+        throw new Error(`Credential ${credentialId} not found`);
+      }
+    }
+
+    // Update deployment status to running
+    deployment.status = "running";
     deployment.currentStep = 0;
     deployment.logs.push({
       timestamp: new Date(),
@@ -82,21 +102,58 @@ async function processDeploymentJob(
     // Create deployment executor
     const executor = new DeploymentExecutor(deploymentId);
 
-    // Create command executor using SSH
-    const sshConfig = {
-      host: parameters.serverIp as string || "localhost",
-      username: parameters.username as string || "ubuntu",
-      privateKey: parameters.sshKey as string,
-      timeout: 30000,
-    };
-
+    // Create command executor using SSH from server connection or parameters
     let sshExecutor: SSHExecutor | null = null;
 
-    try {
-      sshExecutor = new SSHExecutor(sshConfig);
-      await sshExecutor.connect();
-    } catch (error) {
-      console.warn("SSH connection failed, continuing with simulated execution");
+    if (serverConnection && serverConnection.connectionType === "ssh") {
+      // Use server connection credentials
+      try {
+        const sshConfig = {
+          host: serverConnection.host,
+          port: serverConnection.port || 22,
+          username: serverConnection.username,
+          ...(serverConnection.authMethod === "password" && {
+            password: serverConnection.auth.password,
+          }),
+          ...(serverConnection.authMethod === "private-key" && {
+            privateKey: serverConnection.auth.privateKey,
+            privateKeyPassphrase: serverConnection.auth.privateKeyPassphrase,
+          }),
+          timeout: serverConnection.sshSettings?.timeout || 30000,
+        };
+
+        sshExecutor = new SSHExecutor(sshConfig);
+        await sshExecutor.connect();
+
+        deployment.logs.push({
+          timestamp: new Date(),
+          level: "success",
+          message: `✓ Connected to server: ${serverConnection.host}`,
+        });
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        deployment.logs.push({
+          timestamp: new Date(),
+          level: "error",
+          message: `✗ SSH connection failed: ${errorMsg}`,
+        });
+        throw error;
+      }
+    } else {
+      // Fallback to parameters (for cloud provider deployments)
+      const sshConfig = {
+        host: parameters.serverIp as string || "localhost",
+        username: parameters.username as string || "ubuntu",
+        privateKey: parameters.sshKey as string,
+        timeout: 30000,
+      };
+
+      try {
+        sshExecutor = new SSHExecutor(sshConfig);
+        await sshExecutor.connect();
+      } catch (error) {
+        console.warn("SSH connection failed, continuing with simulated execution");
+      }
     }
 
     // Execute deployment steps
@@ -126,17 +183,32 @@ async function processDeploymentJob(
     // Disconnect SSH if connected
     if (sshExecutor?.isSSHConnected()) {
       await sshExecutor.disconnect();
+      deployment.logs.push({
+        timestamp: new Date(),
+        level: "info",
+        message: "✓ Disconnected from server",
+      });
     }
 
     // Update deployment with final result
     if (result.success) {
-      deployment.status = "success";
+      deployment.status = "completed";
       deployment.result = result.result;
+      deployment.logs.push({
+        timestamp: new Date(),
+        level: "success",
+        message: "✓ Deployment completed successfully",
+      });
     } else {
       deployment.status = "failed";
       deployment.result = {
         error: result.error,
       };
+      deployment.logs.push({
+        timestamp: new Date(),
+        level: "error",
+        message: `✗ Deployment failed: ${result.error}`,
+      });
     }
 
     deployment.currentStep = result.currentStep;
@@ -145,6 +217,7 @@ async function processDeploymentJob(
       level: log.level as "info" | "warning" | "error" | "success",
       message: log.message,
     }));
+    deployment.completedAt = new Date();
     deployment.updatedAt = new Date();
 
     await deployment.save();
@@ -162,6 +235,8 @@ async function processDeploymentJob(
     const deployment = await Deployment.findById(job.data.deploymentId);
     if (deployment) {
       deployment.status = "failed";
+      deployment.completedAt = new Date();
+      deployment.errorMessage = errorMessage;
       deployment.logs.push({
         timestamp: new Date(),
         level: "error",

@@ -21,6 +21,7 @@ export interface IDeployment extends Document {
   templateId: mongoose.Types.ObjectId;
   templateName: string;
   credentialId: mongoose.Types.ObjectId;
+  serverConnectionId?: mongoose.Types.ObjectId;
   provider: string;
   status: DeploymentStatus;
   parameters: Record<string, string | number | boolean>;
@@ -71,6 +72,10 @@ const DeploymentSchema = new Schema<IDeployment>(
       type: Schema.Types.ObjectId,
       ref: "CloudCredential",
       required: true,
+    },
+    serverConnectionId: {
+      type: Schema.Types.ObjectId,
+      ref: "ServerConnection",
     },
     provider: {
       type: String,

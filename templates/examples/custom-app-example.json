@@ -1,0 +1,209 @@
+{
+  "id": "example-custom-app",
+  "name": "Custom Application Deployment",
+  "description": "Example template showing how to create custom deployment templates",
+  "version": "1.0.0",
+  "category": "docker",
+  "provider": "any",
+  "author": {
+    "name": "Your DevOps Team",
+    "email": "devops@yourcompany.com"
+  },
+  "tags": ["custom", "example", "tutorial"],
+  "estimatedTime": "20 minutes",
+  "usageCount": 0,
+  "requirements": [
+    "Docker installed",
+    "Server with SSH access",
+    "Git repository access"
+  ],
+  "parameters": [
+    {
+      "name": "APP_NAME",
+      "type": "string",
+      "description": "Name of your application",
+      "required": true,
+      "default": "my-custom-app"
+    },
+    {
+      "name": "REPOSITORY_URL",
+      "type": "string",
+      "description": "Git repository URL",
+      "required": true,
+      "default": "https://github.com/username/repo.git"
+    },
+    {
+      "name": "BRANCH",
+      "type": "string",
+      "description": "Git branch to deploy",
+      "required": false,
+      "default": "main"
+    },
+    {
+      "name": "DEPLOYMENT_PATH",
+      "type": "string",
+      "description": "Where to deploy on server",
+      "required": true,
+      "default": "/opt/apps"
+    },
+    {
+      "name": "ENVIRONMENT",
+      "type": "select",
+      "description": "Deployment environment",
+      "options": ["production", "staging", "development"],
+      "required": true,
+      "default": "production"
+    },
+    {
+      "name": "PORT",
+      "type": "number",
+      "description": "Application port",
+      "required": false,
+      "default": 3000
+    },
+    {
+      "name": "API_KEY",
+      "type": "string",
+      "description": "API key for external services",
+      "required": false,
+      "secret": true
+    },
+    {
+      "name": "DATABASE_URL",
+      "type": "string",
+      "description": "Database connection string",
+      "required": true,
+      "secret": true
+    },
+    {
+      "name": "SLACK_WEBHOOK",
+      "type": "string",
+      "description": "Slack webhook for notifications",
+      "required": false,
+      "secret": true
+    }
+  ],
+  "steps": [
+    {
+      "name": "Create deployment directory",
+      "description": "Set up the directory structure for deployment",
+      "command": "mkdir -p ${DEPLOYMENT_PATH}/${APP_NAME} && cd ${DEPLOYMENT_PATH}/${APP_NAME} && pwd"
+    },
+    {
+      "name": "Clone repository",
+      "description": "Clone the application source code",
+      "command": "cd ${DEPLOYMENT_PATH}/${APP_NAME} && git clone --branch ${BRANCH} ${REPOSITORY_URL} . || git pull"
+    },
+    {
+      "name": "Create environment file",
+      "description": "Generate .env file with configuration",
+      "command": "cat > ${DEPLOYMENT_PATH}/${APP_NAME}/.env << 'EOF'\nNODE_ENV=${ENVIRONMENT}\nPORT=${PORT}\nDATABASE_URL=${DATABASE_URL}\nAPI_KEY=${API_KEY}\nEOF"
+    },
+    {
+      "name": "Install dependencies",
+      "description": "Install application dependencies using pnpm",
+      "command": "cd ${DEPLOYMENT_PATH}/${APP_NAME} && npm install -g pnpm && pnpm install"
+    },
+    {
+      "name": "Build application",
+      "description": "Build the application for production",
+      "command": "cd ${DEPLOYMENT_PATH}/${APP_NAME} && pnpm build"
+    },
+    {
+      "name": "Create Docker image",
+      "description": "Build Docker image from Dockerfile",
+      "command": "cd ${DEPLOYMENT_PATH}/${APP_NAME} && docker build -t ${APP_NAME}:latest ."
+    },
+    {
+      "name": "Stop existing container",
+      "description": "Stop and remove the old container if running",
+      "command": "docker stop ${APP_NAME}-container || true && docker rm ${APP_NAME}-container || true",
+      "continueOnError": true
+    },
+    {
+      "name": "Run new container",
+      "description": "Start the new Docker container",
+      "command": "docker run -d --name ${APP_NAME}-container -p ${PORT}:${PORT} -e NODE_ENV=${ENVIRONMENT} -e DATABASE_URL=${DATABASE_URL} -e API_KEY=${API_KEY} --restart unless-stopped ${APP_NAME}:latest"
+    },
+    {
+      "name": "Wait for container startup",
+      "description": "Give the container time to start",
+      "command": "sleep 5 && docker ps | grep ${APP_NAME}-container"
+    },
+    {
+      "name": "Test health endpoint",
+      "description": "Verify the application is running",
+      "command": "sleep 3 && curl -f http://localhost:${PORT}/health || curl -f http://localhost:${PORT}/ || echo 'Service starting...'"
+    },
+    {
+      "name": "View container logs",
+      "description": "Display container startup logs",
+      "command": "docker logs --tail=30 ${APP_NAME}-container"
+    },
+    {
+      "name": "Send Slack notification",
+      "description": "Notify Slack channel of successful deployment",
+      "command": "if [ -n '${SLACK_WEBHOOK}' ]; then curl -X POST ${SLACK_WEBHOOK} -H 'Content-Type: application/json' -d '{\"text\": \"✅ ${APP_NAME} deployed successfully on ${ENVIRONMENT}\"}'; fi",
+      "continueOnError": true
+    }
+  ],
+  "postDeployment": {
+    "healthCheck": {
+      "enabled": true,
+      "endpoint": "http://localhost:{PORT}/health",
+      "interval": 30,
+      "timeout": 10,
+      "retries": 5
+    },
+    "notifications": [
+      {
+        "type": "log",
+        "message": "Application ${APP_NAME} deployed successfully to ${ENVIRONMENT}"
+      }
+    ]
+  },
+  "rollbackSteps": [
+    {
+      "name": "Stop current container",
+      "command": "docker stop ${APP_NAME}-container"
+    },
+    {
+      "name": "Revert to previous commit",
+      "command": "cd ${DEPLOYMENT_PATH}/${APP_NAME} && git revert HEAD || git reset --hard HEAD~1"
+    },
+    {
+      "name": "Rebuild previous version",
+      "command": "cd ${DEPLOYMENT_PATH}/${APP_NAME} && pnpm install && pnpm build && docker build -t ${APP_NAME}:previous ."
+    },
+    {
+      "name": "Start previous container",
+      "command": "docker run -d --name ${APP_NAME}-container -p ${PORT}:${PORT} --restart unless-stopped ${APP_NAME}:previous"
+    }
+  ],
+  "documentation": {
+    "title": "Custom Application Deployment",
+    "description": "Complete guide for deploying your custom application",
+    "sections": [
+      {
+        "title": "Setup Requirements",
+        "content": "Ensure your repository has a Dockerfile in the root directory and a package.json for Node.js dependencies"
+      },
+      {
+        "title": "Environment Variables",
+        "content": "All sensitive data should be passed as secret parameters. They will be safely interpolated into the .env file"
+      },
+      {
+        "title": "Health Checks",
+        "content": "The template expects a /health endpoint. If your app doesn't have one, modify the postDeployment section"
+      },
+      {
+        "title": "Rollback Strategy",
+        "content": "The rollback will revert the Git commit and rebuild from the previous version"
+      },
+      {
+        "title": "Monitoring",
+        "content": "After deployment, monitor the container logs: docker logs -f ${APP_NAME}-container"
+      }
+    ]
+  }
+}

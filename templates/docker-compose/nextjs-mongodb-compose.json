@@ -1,0 +1,111 @@
+{
+  "id": "nextjs-docker-compose-mongodb",
+  "name": "Next.js + MongoDB with Docker Compose",
+  "description": "Deploy Next.js with MongoDB using Docker Compose for full stack management",
+  "version": "1.0.0",
+  "category": "docker-compose",
+  "provider": "any",
+  "tags": ["nextjs", "docker-compose", "mongodb", "full-stack"],
+  "estimatedTime": "45 minutes",
+  "parameters": [
+    {
+      "name": "APP_NAME",
+      "type": "string",
+      "required": true,
+      "default": "doez"
+    },
+    {
+      "name": "DOCKER_IMAGE",
+      "type": "string",
+      "required": true,
+      "default": "ghcr.io/username/doez:latest"
+    },
+    {
+      "name": "MONGODB_ROOT_PASSWORD",
+      "type": "string",
+      "required": true,
+      "secret": true
+    },
+    {
+      "name": "MONGODB_USER",
+      "type": "string",
+      "required": true,
+      "default": "doez-user"
+    },
+    {
+      "name": "MONGODB_PASSWORD",
+      "type": "string",
+      "required": true,
+      "secret": true
+    },
+    {
+      "name": "JWT_SECRET",
+      "type": "string",
+      "required": true,
+      "secret": true
+    },
+    {
+      "name": "NODE_ENV",
+      "type": "select",
+      "options": ["production", "staging", "development"],
+      "default": "production",
+      "required": true
+    },
+    {
+      "name": "APP_PORT",
+      "type": "number",
+      "default": 3000,
+      "required": false
+    },
+    {
+      "name": "DEPLOYMENT_PATH",
+      "type": "string",
+      "default": "/opt/doez",
+      "required": true
+    }
+  ],
+  "steps": [
+    {
+      "name": "Create deployment directory",
+      "command": "mkdir -p ${DEPLOYMENT_PATH} && cd ${DEPLOYMENT_PATH}"
+    },
+    {
+      "name": "Create docker-compose.yml",
+      "command": "cat > ${DEPLOYMENT_PATH}/docker-compose.yml << 'EOF'\nversion: '3.8'\nservices:\n  app:\n    image: ${DOCKER_IMAGE}\n    container_name: ${APP_NAME}\n    ports:\n      - \"${APP_PORT}:3000\"\n    environment:\n      - NODE_ENV=${NODE_ENV}\n      - MONGODB_URI=mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@mongo:27017/doez\n      - JWT_SECRET=${JWT_SECRET}\n    depends_on:\n      - mongo\n    restart: unless-stopped\n    networks:\n      - doez-network\n    healthcheck:\n      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:3000/api/auth/check\"]\n      interval: 30s\n      timeout: 10s\n      retries: 3\n\n  mongo:\n    image: mongo:6.0\n    container_name: ${APP_NAME}-mongo\n    environment:\n      - MONGO_INITDB_ROOT_USERNAME=root\n      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}\n      - MONGO_INITDB_DATABASE=doez\n    volumes:\n      - mongo_data:/data/db\n      - mongo_config:/data/configdb\n    restart: unless-stopped\n    networks:\n      - doez-network\n\nvolumes:\n  mongo_data:\n  mongo_config:\n\nnetworks:\n  doez-network:\n    driver: bridge\nEOF"
+    },
+    {
+      "name": "Create .env file",
+      "command": "cat > ${DEPLOYMENT_PATH}/.env << 'EOF'\nDOCKER_IMAGE=${DOCKER_IMAGE}\nAPP_NAME=${APP_NAME}\nAPP_PORT=${APP_PORT}\nNODE_ENV=${NODE_ENV}\nMONGODB_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD}\nMONGODB_USER=${MONGODB_USER}\nMONGODB_PASSWORD=${MONGODB_PASSWORD}\nJWT_SECRET=${JWT_SECRET}\nEOF"
+    },
+    {
+      "name": "Create init-mongo script",
+      "command": "mkdir -p ${DEPLOYMENT_PATH}/mongo-init && cat > ${DEPLOYMENT_PATH}/mongo-init/init.js << 'EOF'\ndb.createUser({\n  user: \"${MONGODB_USER}\",\n  pwd: \"${MONGODB_PASSWORD}\",\n  roles: [\"readWrite\"],\n  db: \"doez\"\n});\nEOF"
+    },
+    {
+      "name": "Pull latest images",
+      "command": "cd ${DEPLOYMENT_PATH} && docker-compose pull"
+    },
+    {
+      "name": "Start services",
+      "command": "cd ${DEPLOYMENT_PATH} && docker-compose up -d"
+    },
+    {
+      "name": "Wait for services to be ready",
+      "command": "sleep 10 && cd ${DEPLOYMENT_PATH} && docker-compose ps"
+    },
+    {
+      "name": "Verify MongoDB connection",
+      "command": "cd ${DEPLOYMENT_PATH} && docker-compose exec -T mongo mongo --username root --password ${MONGODB_ROOT_PASSWORD} --authenticationDatabase admin --eval \"db.adminCommand('ping')\""
+    },
+    {
+      "name": "Check application logs",
+      "command": "cd ${DEPLOYMENT_PATH} && docker-compose logs --tail=20 app"
+    }
+  ],
+  "postDeployment": {
+    "healthCheck": {
+      "enabled": true,
+      "endpoint": "http://localhost:{APP_PORT}/api/auth/check"
+    }
+  }
+}

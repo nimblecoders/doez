@@ -1,0 +1,92 @@
+{
+  "id": "nextjs-multi-stage-dockerfile",
+  "name": "Next.js Multi-Stage Dockerfile",
+  "description": "Optimized multi-stage Docker build for Next.js with minimal final image size",
+  "version": "1.0.0",
+  "category": "dockerfile",
+  "provider": "any",
+  "tags": ["nextjs", "dockerfile", "multi-stage", "optimization"],
+  "estimatedTime": "60 minutes",
+  "parameters": [
+    {
+      "name": "APP_NAME",
+      "type": "string",
+      "required": true,
+      "default": "doez"
+    },
+    {
+      "name": "REGISTRY",
+      "type": "string",
+      "description": "Docker registry (e.g., ghcr.io, docker.io)",
+      "required": true,
+      "default": "ghcr.io"
+    },
+    {
+      "name": "GITHUB_OWNER",
+      "type": "string",
+      "required": true,
+      "description": "GitHub username or organization"
+    },
+    {
+      "name": "NODE_VERSION",
+      "type": "select",
+      "options": ["18-alpine", "20-alpine", "22-alpine"],
+      "default": "20-alpine",
+      "required": true
+    },
+    {
+      "name": "DEPLOYMENT_PATH",
+      "type": "string",
+      "default": "/opt/doez",
+      "required": true
+    }
+  ],
+  "steps": [
+    {
+      "name": "Create project directory",
+      "command": "mkdir -p ${DEPLOYMENT_PATH} && cd ${DEPLOYMENT_PATH}"
+    },
+    {
+      "name": "Create Dockerfile",
+      "command": "cat > ${DEPLOYMENT_PATH}/Dockerfile << 'EOF'\n# Stage 1: Dependencies\nFROM node:${NODE_VERSION} AS deps\nWORKDIR /app\nCOPY package.json pnpm-lock.yaml ./\nRUN npm install -g pnpm && pnpm install --frozen-lockfile\n\n# Stage 2: Build\nFROM node:${NODE_VERSION} AS builder\nWORKDIR /app\nCOPY --from=deps /app/node_modules ./node_modules\nCOPY . .\nRUN npm install -g pnpm && pnpm build\n\n# Stage 3: Runtime\nFROM node:${NODE_VERSION} AS runner\nWORKDIR /app\n\nENV NODE_ENV production\n\nRUN npm install -g pnpm\n\nCOPY --from=builder /app/public ./public\nCOPY --from=builder /app/.next/standalone ./\nCOPY --from=builder /app/.next/static ./.next/static\n\nEXPOSE 3000\n\nCMD [\"node\", \"server.js\"]\nEOF"
+    },
+    {
+      "name": "Create .dockerignore",
+      "command": "cat > ${DEPLOYMENT_PATH}/.dockerignore << 'EOF'\nnode_modules\nnpm-debug.log\n.git\n.gitignore\nREADME.md\n.env.local\n.next\ndist\n.turbo\nEOF"
+    },
+    {
+      "name": "Verify Dockerfile",
+      "command": "cat ${DEPLOYMENT_PATH}/Dockerfile | head -30"
+    },
+    {
+      "name": "Clone repository (if not present)",
+      "command": "if [ ! -f ${DEPLOYMENT_PATH}/package.json ]; then cd ${DEPLOYMENT_PATH} && git clone https://github.com/${GITHUB_OWNER}/doez . || echo 'Repository may already be cloned'; fi"
+    },
+    {
+      "name": "Build Docker image",
+      "command": "cd ${DEPLOYMENT_PATH} && docker build -t ${REGISTRY}/${GITHUB_OWNER}/${APP_NAME}:latest -t ${REGISTRY}/${GITHUB_OWNER}/${APP_NAME}:$(date +%Y%m%d-%H%M%S) ."
+    },
+    {
+      "name": "Verify image created",
+      "command": "docker images | grep ${APP_NAME}"
+    },
+    {
+      "name": "Get image size",
+      "command": "docker images | grep ${REGISTRY}/${GITHUB_OWNER}/${APP_NAME}"
+    }
+  ],
+  "documentation": {
+    "title": "Next.js Multi-Stage Docker Build",
+    "description": "Creates optimized Docker images using multi-stage builds",
+    "sections": [
+      {
+        "title": "Build Stages",
+        "content": "Stage 1 (deps): Installs dependencies. Stage 2 (builder): Builds Next.js. Stage 3 (runner): Creates minimal production image."
+      },
+      {
+        "title": "Image Optimization",
+        "content": "Uses Alpine Linux base image, multi-stage builds, and only copies necessary files to final image."
+      }
+    ]
+  }
+}
