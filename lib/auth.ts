@@ -1,11 +1,13 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 
-const secretKey = process.env.JWT_SECRET;
-if (!secretKey) {
-  throw new Error("JWT_SECRET environment variable is required");
+const secretKey = process.env.JWT_SECRET || (process.env.NODE_ENV === "production" ? undefined : "dev-secret-key-for-local-development-only");
+
+if (!secretKey && process.env.NODE_ENV === "production") {
+  throw new Error("JWT_SECRET environment variable is required in production");
 }
-const key = new TextEncoder().encode(secretKey);
+
+const key = new TextEncoder().encode(secretKey || "");
 
 export interface SessionPayload {
   userId: string;
@@ -76,7 +78,7 @@ export async function deleteSession() {
   const cookieStore = await cookies();
   cookieStore.delete("session");
 }
-export async function verifySession(): Promise<string | null> {
+export async function verifySession(): Promise<SessionPayload | null> {
   const session = await getSession();
 
   if (!session) {
@@ -89,5 +91,5 @@ export async function verifySession(): Promise<string | null> {
     return null;
   }
 
-  return session; // return rid
+  return session;
 }

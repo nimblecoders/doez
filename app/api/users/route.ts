@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import { getSession } from "@/lib/auth";
+import { VALIDATION, ERROR_MESSAGES, HTTP_STATUS } from "@/lib/constants";
 
 // Get all users (admin only)
 export async function GET() {
@@ -56,10 +57,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (password.length < 6) {
+    if (!VALIDATION.EMAIL_REGEX.test(email)) {
       return NextResponse.json(
-        { error: "Password must be at least 6 characters" },
-        { status: 400 }
+        { error: ERROR_MESSAGES.INVALID_EMAIL },
+        { status: HTTP_STATUS.BAD_REQUEST }
+      );
+    }
+
+    if (password.length < VALIDATION.PASSWORD_MIN_LENGTH) {
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.PASSWORD_TOO_SHORT },
+        { status: HTTP_STATUS.BAD_REQUEST }
       );
     }
 

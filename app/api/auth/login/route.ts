@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import connectDB from "@/lib/mongodb";
 import User from "@/lib/models/user";
 import { createSession } from "@/lib/auth";
+import { VALIDATION, ERROR_MESSAGES, HTTP_STATUS } from "@/lib/constants";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,6 +15,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Email and password are required" },
         { status: 400 }
+      );
+    }
+
+    if (!VALIDATION.EMAIL_REGEX.test(email)) {
+      return NextResponse.json(
+        { error: ERROR_MESSAGES.INVALID_EMAIL },
+        { status: HTTP_STATUS.BAD_REQUEST }
       );
     }
 
